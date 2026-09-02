@@ -269,6 +269,89 @@
   }
   .explain strong { color: var(--text); font-weight: 500; }
 
+  .link-row {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .link-btn {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    width: 100%;
+  }
+  .link-btn:hover { border-color: var(--network); color: var(--network); }
+  .link-btn.copied { border-color: var(--network); color: var(--network); }
+
+  .splitter-section {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 clamp(20px, 4vw, 48px) clamp(20px, 4vw, 48px);
+  }
+  .splitter-section h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .splitter-section .sub {
+    color: var(--text-muted);
+    font-size: 13.5px;
+    margin: 0 0 16px;
+    max-width: 72ch;
+  }
+  .splitter-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .splitter-row .field { margin-bottom: 0; flex: 1; min-width: 240px; }
+  .splitter-row input[type="text"] { width: 100%; }
+  .split-btn {
+    background: var(--network-dim);
+    border: 1px solid var(--network);
+    color: var(--network);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .split-btn:hover { background: var(--network); color: #06201C; }
+
+  .split-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+  }
+  .split-table th, .split-table td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .split-table th {
+    color: var(--text-muted);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .split-table tbody tr:hover { background: var(--panel-2); }
+  .split-error {
+    color: var(--error);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
   footer {
     text-align: center;
     color: var(--text-muted);
@@ -305,6 +388,10 @@
       <span><span class="dot network"></span>network bits</span>
       <span><span class="dot host"></span>host bits</span>
     </div>
+
+    <div class="link-row">
+      <button type="button" class="link-btn" id="copyLinkBtn">copy shareable link</button>
+    </div>
   </div>
 
   <div class="visual-panel">
@@ -334,6 +421,22 @@
   </div>
 </main>
 
+<section class="splitter-section">
+  <div class="panel">
+    <h2>Subnet splitter (VLSM)</h2>
+    <p class="sub">Split the network above into smaller subnets sized for the number of hosts each one needs. Enter a comma-separated list of host counts, largest first works best.</p>
+    <div class="splitter-row">
+      <div class="field">
+        <label for="vlsmInput">Hosts needed per subnet</label>
+        <input type="text" id="vlsmInput" class="mono" value="50, 20, 10, 4" spellcheck="false" autocomplete="off">
+      </div>
+      <button type="button" class="split-btn" id="splitBtn">Split</button>
+    </div>
+    <div class="split-error" id="splitError"></div>
+    <div id="splitResult"></div>
+  </div>
+</section>
+
 <footer>
   Built by Tim &middot; a small tool for a specific job.
 </footer>
@@ -350,6 +453,14 @@
   const dottedDecimal = document.getElementById('dottedDecimal');
   const resultsGrid = document.getElementById('resultsGrid');
   const explainText = document.getElementById('explainText');
+  const copyLinkBtn = document.getElementById('copyLinkBtn');
+  const vlsmInput = document.getElementById('vlsmInput');
+  const splitBtn = document.getElementById('splitBtn');
+  const splitError = document.getElementById('splitError');
+  const splitResult = document.getElementById('splitResult');
+
+  let baseNetworkInt = 0;
+  let basePrefixInt = 24;
 
   function ipToInt(parts) {
     return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
@@ -487,7 +598,140 @@
     url.searchParams.set('ip', parts.join('.'));
     url.searchParams.set('prefix', prefix);
     window.history.replaceState({}, '', url);
+
+    baseNetworkInt = network;
+    basePrefixInt = prefix;
+    renderSplit();
   }
+
+  // ---- Subnet splitter (VLSM) ----
+
+  function usableRange(networkInt, broadcastInt, prefix) {
+    if (prefix >= 31) {
+      return {
+        first: prefix === 32 ? 'N/A' : intToIp(networkInt),
+        last: prefix === 32 ? 'N/A' : intToIp(broadcastInt),
+        usable: prefix === 32 ? 1 : 2,
+      };
+    }
+    return {
+      first: intToIp((networkInt + 1) >>> 0),
+      last: intToIp((broadcastInt - 1) >>> 0),
+      usable: Math.pow(2, 32 - prefix) - 2,
+    };
+  }
+
+  function neededPrefix(hosts) {
+    if (!Number.isFinite(hosts) || hosts <= 0) return null;
+    if (hosts === 1) return 32;
+    if (hosts === 2) return 31;
+    const total = hosts + 2;
+    let size = 1;
+    let prefix = 32;
+    while (size < total) {
+      size *= 2;
+      prefix -= 1;
+    }
+    return prefix;
+  }
+
+  function computeVLSM(baseNetwork, basePrefix, hostList) {
+    const baseSize = Math.pow(2, 32 - basePrefix);
+    const baseEnd = baseNetwork + baseSize;
+
+    const reqs = hostList.map((hosts, idx) => {
+      const prefix = neededPrefix(hosts);
+      return {
+        idx,
+        hosts,
+        prefix,
+        size: prefix === null ? null : Math.pow(2, 32 - prefix),
+      };
+    });
+
+    const invalid = reqs.find(r => r.prefix === null);
+    if (invalid) {
+      return { error: 'Enter positive host counts only, e.g. 50, 20, 10, 4' };
+    }
+    const tooBig = reqs.find(r => r.prefix < basePrefix);
+    if (tooBig) {
+      return { error: `A subnet for ${tooBig.hosts} hosts needs more space than the whole /${basePrefix} block above.` };
+    }
+
+    const sorted = [...reqs].sort((a, b) => b.size - a.size || a.idx - b.idx);
+    let cursor = baseNetwork;
+    const allocated = [];
+    for (const r of sorted) {
+      if (cursor + r.size > baseEnd) {
+        return { error: `Ran out of address space allocating a /${r.prefix} for ${r.hosts} hosts. Try fewer or smaller subnets, or a larger base block.` };
+      }
+      allocated.push({ ...r, network: cursor, broadcast: cursor + r.size - 1 });
+      cursor += r.size;
+    }
+    allocated.sort((a, b) => a.idx - b.idx);
+    return { allocated };
+  }
+
+  function renderSplit() {
+    const raw = vlsmInput.value.trim();
+    splitError.textContent = '';
+    splitResult.innerHTML = '';
+
+    if (!raw) return;
+
+    const hostList = raw.split(',').map(s => parseInt(s.trim(), 10));
+    if (hostList.some(n => isNaN(n))) {
+      splitError.textContent = 'Enter a comma-separated list of numbers, e.g. 50, 20, 10, 4';
+      return;
+    }
+
+    const result = computeVLSM(baseNetworkInt, basePrefixInt, hostList);
+    if (result.error) {
+      splitError.textContent = result.error;
+      return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'split-table';
+    table.innerHTML =
+      '<thead><tr>' +
+      '<th>#</th><th>Hosts needed</th><th>CIDR</th><th>Network</th>' +
+      '<th>Usable range</th><th>Broadcast</th><th>Subnet mask</th>' +
+      '</tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    result.allocated.forEach((r, i) => {
+      const netmask = r.prefix === 0 ? 0 : (0xFFFFFFFF << (32 - r.prefix)) >>> 0;
+      const range = usableRange(r.network, r.broadcast, r.prefix);
+      const row = document.createElement('tr');
+      row.innerHTML =
+        '<td>' + (i + 1) + '</td>' +
+        '<td>' + r.hosts + '</td>' +
+        '<td>' + intToIp(r.network) + '/' + r.prefix + '</td>' +
+        '<td>' + intToIp(r.network) + '</td>' +
+        '<td>' + (range.first === 'N/A' ? 'N/A' : range.first + ' - ' + range.last) + '</td>' +
+        '<td>' + intToIp(r.broadcast) + '</td>' +
+        '<td>' + intToIp(netmask) + '</td>';
+      tbody.appendChild(row);
+    });
+
+    table.appendChild(tbody);
+    splitResult.appendChild(table);
+  }
+
+  copyLinkBtn.addEventListener('click', function () {
+    navigator.clipboard.writeText(window.location.href).then(function () {
+      copyLinkBtn.textContent = 'link copied';
+      copyLinkBtn.classList.add('copied');
+      setTimeout(function () {
+        copyLinkBtn.textContent = 'copy shareable link';
+        copyLinkBtn.classList.remove('copied');
+      }, 1200);
+    });
+  });
+
+  vlsmInput.addEventListener('input', renderSplit);
+  splitBtn.addEventListener('click', renderSplit);
 
   // Init from URL params if present
   const params = new URLSearchParams(window.location.search);
