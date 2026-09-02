@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>subnet. — CIDR & Subnet Calculator</title>
+<meta name="description" content="A visual IPv4 subnet calculator that shows the network/host bit split, not just the numbers.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B1220;
+    --panel: #131B2C;
+    --panel-2: #0F1729;
+    --border: #26334A;
+    --text: #E7EDF5;
+    --text-muted: #7C8CA6;
+    --network: #5EEAD4;
+    --network-dim: #1F4A45;
+    --host: #F5A97F;
+    --host-dim: #4A3423;
+    --error: #F87171;
+    --radius: 6px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  header {
+    padding: 28px clamp(20px, 4vw, 48px) 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  header .wordmark {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  header .wordmark span { color: var(--text-muted); font-weight: 400; }
+
+  header .tagline {
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 40ch;
+  }
+
+  main {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: clamp(20px, 4vw, 48px);
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+  }
+
+  .field { margin-bottom: 22px; }
+  .field:last-child { margin-bottom: 0; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 16px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    outline: none;
+  }
+  input[type="text"]:focus { border-color: var(--network); }
+  input[type="text"].invalid { border-color: var(--error); }
+
+  .prefix-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    accent-color: var(--network);
+  }
+
+  .prefix-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 16px;
+    font-weight: 600;
+    min-width: 44px;
+    text-align: right;
+  }
+
+  .error-msg {
+    color: var(--error);
+    font-size: 13px;
+    margin-top: 8px;
+    min-height: 16px;
+  }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .legend .dot {
+    display: inline-block;
+    width: 9px; height: 9px;
+    border-radius: 2px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .legend .dot.network { background: var(--network); }
+  .legend .dot.host { background: var(--host); }
+
+  .visual-panel { display: flex; flex-direction: column; gap: 24px; }
+
+  .block-bar {
+    height: 40px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    border: 1px solid var(--border);
+  }
+  .block-bar .seg-network {
+    background: var(--network);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #06201C;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .block-bar .seg-host {
+    background: var(--host);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #341F0D;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .binary-block h3, .results-panel h3, .ref-panel h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 0 0 14px;
+  }
+
+  .binary-octets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 18px;
+    line-height: 1.4;
+  }
+
+  .octet {
+    display: flex;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .bit {
+    width: 20px;
+    text-align: center;
+    padding: 8px 0;
+  }
+  .bit.network { background: var(--network-dim); color: var(--network); }
+  .bit.host { background: var(--host-dim); color: var(--host); }
+
+  .dotted-decimal {
+    margin-top: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .result-cell {
+    background: var(--panel);
+    padding: 14px 16px;
+    position: relative;
+  }
+  .result-cell .label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .result-cell .value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .result-cell button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .result-cell:hover button { opacity: 1; }
+  .result-cell button:hover { color: var(--network); }
+  .result-cell button.copied { color: var(--network); opacity: 1; }
+
+  .explain {
+    font-size: 13.5px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    max-width: 72ch;
+  }
+  .explain strong { color: var(--text); font-weight: 500; }
+
+  footer {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 32px 20px 40px;
+  }
+  footer a { color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">subnet<span>.</span></div>
+  <div class="tagline">IPv4 subnet calculator that shows the network/host bit split, not just the numbers.</div>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="field">
+      <label for="ipInput">IP address (or IP/prefix)</label>
+      <input type="text" id="ipInput" class="mono" value="192.168.1.10" spellcheck="false" autocomplete="off">
+      <div class="error-msg" id="errorMsg"></div>
+    </div>
+
+    <div class="field">
+      <label for="prefixSlider">Prefix length</label>
+      <div class="prefix-row">
+        <input type="range" id="prefixSlider" min="0" max="32" value="24">
+        <span class="prefix-value mono" id="prefixValue">/24</span>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="dot network"></span>network bits</span>
+      <span><span class="dot host"></span>host bits</span>
+    </div>
+  </div>
+
+  <div class="visual-panel">
+    <div class="panel">
+      <h3>Address block</h3>
+      <div class="block-bar" id="blockBar">
+        <div class="seg-network" id="segNetwork"></div>
+        <div class="seg-host" id="segHost"></div>
+      </div>
+    </div>
+
+    <div class="panel binary-block">
+      <h3>Binary breakdown</h3>
+      <div class="binary-octets" id="binaryOctets"></div>
+      <div class="dotted-decimal" id="dottedDecimal"></div>
+    </div>
+
+    <div class="panel results-panel">
+      <h3>Computed values</h3>
+      <div class="results-grid" id="resultsGrid"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Why</h3>
+      <div class="explain" id="explainText"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Built by Tim &middot; a small tool for a specific job.
+</footer>
+
+<script>
+(function () {
+  const ipInput = document.getElementById('ipInput');
+  const prefixSlider = document.getElementById('prefixSlider');
+  const prefixValue = document.getElementById('prefixValue');
+  const errorMsg = document.getElementById('errorMsg');
+  const segNetwork = document.getElementById('segNetwork');
+  const segHost = document.getElementById('segHost');
+  const binaryOctets = document.getElementById('binaryOctets');
+  const dottedDecimal = document.getElementById('dottedDecimal');
+  const resultsGrid = document.getElementById('resultsGrid');
+  const explainText = document.getElementById('explainText');
+
+  function ipToInt(parts) {
+    return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  }
+
+  function intToIp(n) {
+    return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+  }
+
+  function parseIp(str) {
+    const m = str.trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!m) return null;
+    const parts = m.slice(1, 5).map(Number);
+    if (parts.some(p => p < 0 || p > 255)) return null;
+    return parts;
+  }
+
+  function toBinaryString(n) {
+    return (n >>> 0).toString(2).padStart(32, '0');
+  }
+
+  function formatCell(label, value) {
+    const cell = document.createElement('div');
+    cell.className = 'result-cell';
+    cell.innerHTML =
+      '<div class="label">' + label + '</div>' +
+      '<div class="value mono">' + value + '</div>' +
+      '<button type="button">copy</button>';
+    cell.querySelector('button').addEventListener('click', function (e) {
+      navigator.clipboard.writeText(String(value)).then(function () {
+        e.target.textContent = 'copied';
+        e.target.classList.add('copied');
+        setTimeout(function () {
+          e.target.textContent = 'copy';
+          e.target.classList.remove('copied');
+        }, 1200);
+      });
+    });
+    return cell;
+  }
+
+  function render() {
+    const raw = ipInput.value.trim();
+    let ipPart = raw;
+    let prefixFromInput = null;
+
+    if (raw.includes('/')) {
+      const [ipStr, prefixStr] = raw.split('/');
+      ipPart = ipStr;
+      const p = parseInt(prefixStr, 10);
+      if (!isNaN(p) && p >= 0 && p <= 32) prefixFromInput = p;
+    }
+
+    const parts = parseIp(ipPart);
+
+    if (!parts) {
+      errorMsg.textContent = 'Enter a valid IPv4 address, e.g. 192.168.1.10';
+      ipInput.classList.add('invalid');
+      return;
+    }
+    errorMsg.textContent = '';
+    ipInput.classList.remove('invalid');
+
+    if (prefixFromInput !== null) {
+      prefixSlider.value = prefixFromInput;
+    }
+    const prefix = parseInt(prefixSlider.value, 10);
+    prefixValue.textContent = '/' + prefix;
+
+    const ipInt = ipToInt(parts);
+    const netmask = prefix === 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) >>> 0;
+    const wildcard = (~netmask) >>> 0;
+    const network = (ipInt & netmask) >>> 0;
+    const broadcast = (network | wildcard) >>> 0;
+
+    let firstHost, lastHost, usableHosts;
+    if (prefix >= 31) {
+      firstHost = network;
+      lastHost = broadcast;
+      usableHosts = prefix === 32 ? 1 : 2;
+    } else {
+      firstHost = (network + 1) >>> 0;
+      lastHost = (broadcast - 1) >>> 0;
+      usableHosts = Math.pow(2, 32 - prefix) - 2;
+    }
+    const totalAddresses = Math.pow(2, 32 - prefix);
+
+    // Address block bar
+    const networkPct = (prefix / 32) * 100;
+    const hostPct = 100 - networkPct;
+    segNetwork.style.width = networkPct + '%';
+    segHost.style.width = hostPct + '%';
+    segNetwork.textContent = prefix > 3 ? prefix + ' network bit' + (prefix === 1 ? '' : 's') : '';
+    segHost.textContent = (32 - prefix) > 3 ? (32 - prefix) + ' host bits' : '';
+
+    // Binary breakdown
+    const bin = toBinaryString(ipInt);
+    binaryOctets.innerHTML = '';
+    for (let o = 0; o < 4; o++) {
+      const octetDiv = document.createElement('div');
+      octetDiv.className = 'octet';
+      for (let b = 0; b < 8; b++) {
+        const bitIndex = o * 8 + b;
+        const bitSpan = document.createElement('span');
+        bitSpan.className = 'bit ' + (bitIndex < prefix ? 'network' : 'host');
+        bitSpan.textContent = bin[bitIndex];
+        octetDiv.appendChild(bitSpan);
+      }
+      binaryOctets.appendChild(octetDiv);
+    }
+    dottedDecimal.textContent = parts.join('.') + ' → netmask ' + intToIp(netmask);
+
+    // Results grid
+    resultsGrid.innerHTML = '';
+    [
+      ['Network address', intToIp(network)],
+      ['Broadcast address', intToIp(broadcast)],
+      ['First usable host', prefix >= 31 ? '—' : intToIp(firstHost)],
+      ['Last usable host', prefix >= 31 ? '—' : intToIp(lastHost)],
+      ['Usable hosts', usableHosts.toLocaleString()],
+      ['Total addresses', totalAddresses.toLocaleString()],
+      ['Subnet mask', intToIp(netmask)],
+      ['Wildcard mask', intToIp(wildcard)],
+      ['CIDR notation', parts.join('.') + '/' + prefix],
+    ].forEach(([label, value]) => resultsGrid.appendChild(formatCell(label, value)));
+
+    // Explanation
+    explainText.innerHTML =
+      'The first <strong>' + prefix + ' bits</strong> of the address are fixed by the network — every device in this subnet shares them. ' +
+      'The remaining <strong>' + (32 - prefix) + ' bits</strong> vary per device, giving room for <strong>' + totalAddresses.toLocaleString() + ' total addresses</strong>, ' +
+      'of which <strong>' + usableHosts.toLocaleString() + '</strong> can actually be assigned to hosts — the network and broadcast addresses are reserved and can\'t be used by a device.';
+
+    // Sync URL
+    const url = new URL(window.location);
+    url.searchParams.set('ip', parts.join('.'));
+    url.searchParams.set('prefix', prefix);
+    window.history.replaceState({}, '', url);
+  }
+
+  // Init from URL params if present
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('ip')) ipInput.value = params.get('ip');
+  if (params.get('prefix')) prefixSlider.value = params.get('prefix');
+
+  ipInput.addEventListener('input', render);
+  prefixSlider.addEventListener('input', render);
+
+  render();
+})();
+</script>
+
+</body>
+</html>
