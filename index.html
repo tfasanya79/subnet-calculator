@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>subnet. — CIDR & Subnet Calculator</title>
+<title>subnet. : CIDR & Subnet Calculator</title>
 <meta name="description" content="A visual IPv4 subnet calculator that shows the network/host bit split, not just the numbers.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -467,8 +467,8 @@
     [
       ['Network address', intToIp(network)],
       ['Broadcast address', intToIp(broadcast)],
-      ['First usable host', prefix >= 31 ? '—' : intToIp(firstHost)],
-      ['Last usable host', prefix >= 31 ? '—' : intToIp(lastHost)],
+      ['First usable host', prefix >= 31 ? 'N/A' : intToIp(firstHost)],
+      ['Last usable host', prefix >= 31 ? 'N/A' : intToIp(lastHost)],
       ['Usable hosts', usableHosts.toLocaleString()],
       ['Total addresses', totalAddresses.toLocaleString()],
       ['Subnet mask', intToIp(netmask)],
@@ -478,9 +478,9 @@
 
     // Explanation
     explainText.innerHTML =
-      'The first <strong>' + prefix + ' bits</strong> of the address are fixed by the network — every device in this subnet shares them. ' +
+      'The first <strong>' + prefix + ' bits</strong> of the address are fixed by the network, so every device in this subnet shares them. ' +
       'The remaining <strong>' + (32 - prefix) + ' bits</strong> vary per device, giving room for <strong>' + totalAddresses.toLocaleString() + ' total addresses</strong>, ' +
-      'of which <strong>' + usableHosts.toLocaleString() + '</strong> can actually be assigned to hosts — the network and broadcast addresses are reserved and can\'t be used by a device.';
+      'of which <strong>' + usableHosts.toLocaleString() + '</strong> can actually be assigned to hosts. The network and broadcast addresses are reserved and cannot be used by a device.';
 
     // Sync URL
     const url = new URL(window.location);
