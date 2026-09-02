@@ -2,7 +2,7 @@
 
 A clean, visual IPv4 subnet calculator that shows why the numbers are what they are, not just the numbers themselves.
 
-Most subnet calculators dump a wall of output. This one visualizes the network/host bit split, breaks the address down into binary octet by octet, and explains the reasoning alongside the results. It's built for students, network/IT admins, and anyone studying for Network+/CCNA who wants the math to actually click.
+Most subnet calculators dump a wall of output. This one visualizes the network/host bit split, breaks the address down into binary octet by octet, explains the reasoning alongside the results, and can split a network into smaller subnets sized for how many hosts each one actually needs.
 
 **Live app:** https://aipal-staging.cloud/subnet-calculator/
 
@@ -20,17 +20,13 @@ Most subnet calculators dump a wall of output. This one visualizes the network/h
   - Subnet mask and wildcard mask
   - CIDR notation
 - **"Why" panel**: a plain English explanation of the current calculation
+- **Shareable link**: the current IP and prefix are kept in the URL as you type, and a "copy shareable link" button puts it straight on your clipboard
+- **Subnet splitter (VLSM)**: enter a comma-separated list of host counts (for example `50, 20, 10, 4`) and it carves the network above into correctly sized, non-overlapping subnets, showing the CIDR, network address, usable range, broadcast, and mask for each one
 - **Client side only**: no backend, no tracking, nothing ever leaves your browser
 
 ## Tech stack
 
 Single file vanilla HTML, CSS, and JS (no framework, no build step) so the logic stays easy to read and audit. IBM Plex Sans/Mono gives it a clean, technical feel.
-
-## Roadmap ideas
-
-- IPv6 support
-- Subnet splitting / VLSM planner (divide a block into N subnets)
-- Shareable permalink for a given IP/prefix
 
 ## Development and deployment
 
